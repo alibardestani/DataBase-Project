@@ -373,11 +373,50 @@ function mainMenu($mysqli) {
     return $choice;
 }
 
+function homeMenu($mysqli, $userId) {
+    echo "\n--- Home Menu ---\n";
+    echo "1. View Posts by Contacts\n";
+    echo "2. Like a Post\n";
+    echo "3. Comment on a Post\n";
+    echo "4. Share a Post\n";
+    echo "5. Back to Main Menu\n";
+
+    $choice = readlineInput("Enter your choice: ");
+
+    switch ($choice) {
+        case '1':
+            getPostsByContacts($mysqli, $userId);
+            break;
+        case '2':
+            $postId = (int)readlineInput("Enter post ID to like: ");
+            likePost($mysqli, $userId, $postId);
+            break;
+        case '3':
+            $postId = (int)readlineInput("Enter post ID to comment on: ");
+            $content = readlineInput("Enter comment content: ");
+            commentOnPost($mysqli, $userId, $postId, $content);
+            break;
+        case '4':
+            $postId = (int)readlineInput("Enter post ID to share: ");
+            sharePost($mysqli, $userId, $postId);
+            break;
+        case '5':
+            return;
+        default:
+            echo "Invalid choice.\n";
+            break;
+    }
+}
+
+
 function profileMenu($mysqli, $userId) {
     echo "\n--- Profile Menu ---\n";
     echo "1. Create/Update Profile\n";
     echo "2. Create Post\n";
-    echo "3. Back to Main Menu\n";
+    echo "3. Like a Post\n";
+    echo "4. Comment on a Post\n";
+    echo "5. Share a Post\n";
+    echo "6. Back to Main Menu\n";
 
     $choice = readlineInput("Enter your choice: ");
 
@@ -390,6 +429,19 @@ function profileMenu($mysqli, $userId) {
             createPost($mysqli, $userId, $content);
             break;
         case '3':
+            $postId = (int)readlineInput("Enter post ID to like: ");
+            likePost($mysqli, $userId, $postId);
+            break;
+        case '4':
+            $postId = (int)readlineInput("Enter post ID to comment on: ");
+            $content = readlineInput("Enter comment content: ");
+            commentOnPost($mysqli, $userId, $postId, $content);
+            break;
+        case '5':
+            $postId = (int)readlineInput("Enter post ID to share: ");
+            sharePost($mysqli, $userId, $postId);
+            break;
+        case '6':
             return;
         default:
             echo "Invalid choice.\n";
@@ -397,24 +449,6 @@ function profileMenu($mysqli, $userId) {
     }
 }
 
-function homeMenu($mysqli, $userId) {
-    echo "\n--- Home Menu ---\n";
-    echo "1. View Posts by Contacts\n";
-    echo "2. Back to Main Menu\n";
-
-    $choice = readlineInput("Enter your choice: ");
-
-    switch ($choice) {
-        case '1':
-            getPostsByContacts($mysqli, $userId);
-            break;
-        case '2':
-            return;
-        default:
-            echo "Invalid choice.\n";
-            break;
-    }
-}
 
 function networkMenu($mysqli, $userId) {
     echo "\n--- Network Menu ---\n";
