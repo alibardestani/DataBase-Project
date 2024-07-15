@@ -1,12 +1,10 @@
 <?php
 $mysqli = new mysqli("localhost", "root", "", "linkdin-db");
 
-// Check connection
 if ($mysqli->connect_error) {
     die("Connection failed: " . $mysqli->connect_error);
 }
 
-// Create tables if not exists
 $createTablesQuery = "
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -102,6 +100,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user1_id INT NOT NULL,
     user2_id INT NOT NULL,
+    archived ENUM('yes', 'no') NOT NULL DEFAULT 'no',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user1_id) REFERENCES users(id),
     FOREIGN KEY (user2_id) REFERENCES users(id)
@@ -112,6 +111,7 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id INT NOT NULL,
     sender_id INT NOT NULL,
     content TEXT NOT NULL,
+    is_read ENUM('yes', 'no') NOT NULL DEFAULT 'no',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id),
     FOREIGN KEY (sender_id) REFERENCES users(id)
@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS invitations (
 );
 ";
 
+
 if (!$mysqli->multi_query($createTablesQuery)) {
     die("Error creating tables: " . $mysqli->error);
 }
@@ -137,7 +138,7 @@ while ($mysqli->more_results() && $mysqli->next_result()) {
     // nothing to do here, just free up the result set
 }
 
-// Function to create or update a profile
+
 function createOrUpdateProfile($mysqli, $userId) {
     $intro = readlineInput("Enter Intro: ");
     $about = readlineInput("Enter About: ");
@@ -164,7 +165,6 @@ function createOrUpdateProfile($mysqli, $userId) {
     }
 }
 
-// Function to get user ID based on username
 function getUserId($mysqli, $username) {
     $stmt = $mysqli->prepare("SELECT id FROM users WHERE username = ?");
     $stmt->bind_param("s", $username);
@@ -180,7 +180,6 @@ function getUserId($mysqli, $username) {
     }
 }
 
-// Function to create a post
 function createPost($mysqli, $userId, $content) {
     $postQuery = "INSERT INTO posts (user_id, content) VALUES (?, ?)";
     $stmt = $mysqli->prepare($postQuery);
@@ -193,7 +192,6 @@ function createPost($mysqli, $userId, $content) {
     }
 }
 
-// Function to check if post exists
 function checkPostExists($mysqli, $postId) {
     $stmt = $mysqli->prepare("SELECT id FROM posts WHERE id = ?");
     $stmt->bind_param("i", $postId);
@@ -204,7 +202,6 @@ function checkPostExists($mysqli, $postId) {
     return $exists;
 }
 
-// Function to like a post
 function likePost($mysqli, $userId, $postId) {
     if (!checkPostExists($mysqli, $postId)) {
         echo "Post with ID $postId does not exist.\n";
@@ -221,11 +218,9 @@ function likePost($mysqli, $userId, $postId) {
         echo "Error liking post: " . $stmt->error . "\n";
     }
 
-    // Display posts by contacts after liking a post
     getPostsByContacts($mysqli, $userId);
 }
 
-// Function to comment on a post
 function commentOnPost($mysqli, $userId, $postId, $content, $parentCommentId = null) {
     if (!checkPostExists($mysqli, $postId)) {
         echo "Post with ID $postId does not exist.\n";
@@ -243,7 +238,6 @@ function commentOnPost($mysqli, $userId, $postId, $content, $parentCommentId = n
     }
 }
 
-// Function to like a comment
 function likeComment($mysqli, $userId, $commentId) {
     $likeQuery = "INSERT INTO comment_likes (user_id, comment_id) VALUES (?, ?)";
     $stmt = $mysqli->prepare($likeQuery);
@@ -256,7 +250,6 @@ function likeComment($mysqli, $userId, $commentId) {
     }
 }
 
-// Function to share a post
 function sharePost($mysqli, $userId, $postId) {
     if (!checkPostExists($mysqli, $postId)) {
         echo "Post with ID $postId does not exist.\n";
@@ -274,7 +267,6 @@ function sharePost($mysqli, $userId, $postId) {
     }
 }
 
-// Function to send notifications
 function sendNotification($mysqli, $userId, $message) {
     $notificationQuery = "INSERT INTO notifications (user_id, message) VALUES (?, ?)";
     $stmt = $mysqli->prepare($notificationQuery);
@@ -287,7 +279,6 @@ function sendNotification($mysqli, $userId, $message) {
     }
 }
 
-// Function to get posts by contacts
 function getPostsByContacts($mysqli, $userId) {
     $postsQuery = "SELECT posts.*, COUNT(likes.id) as like_count, COUNT(comments.id) as comment_count FROM posts
                     JOIN contacts ON posts.user_id = contacts.contact_id
@@ -316,7 +307,6 @@ function getPostsByContacts($mysqli, $userId) {
     }
 }
 
-// Function to show all posts
 function showPosts($mysqli) {
     $postsQuery = "SELECT * FROM posts ORDER BY created_at DESC";
     $result = $mysqli->query($postsQuery);
@@ -333,7 +323,6 @@ function showPosts($mysqli) {
     }
 }
 
-// Function to show invitations
 function showInvitations($mysqli, $userId) {
     $invitationsQuery = "SELECT * FROM invitations WHERE user_id = ? AND status = 'pending'";
 
@@ -353,8 +342,64 @@ function showInvitations($mysqli, $userId) {
         echo "No pending invitations.\n";
     }
 }
+function deleteConversation($mysqli, $conversation_id) {
+    $query = "DELETE FROM conversations WHERE id = ?";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("i", $conversation_id);
+    if ($stmt->execute()) {
+        echo "Conversation deleted successfully\n";
+    } else {
+        echo "Error deleting conversation: " . $stmt->error . "\n";
+    }
+}
 
-// Function to show people you may know
+function markConversationAsUnread($mysqli, $conversation_id) {
+    $query = "UPDATE messages SET is_read = 'no' WHERE conversation_id = ?";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("i", $conversation_id);
+    if ($stmt->execute()) {
+        echo "Conversation marked as unread successfully\n";
+    } else {
+        echo "Error marking conversation as unread: " . $stmt->error . "\n";
+    }
+}
+
+function archiveConversation($mysqli, $conversation_id) {
+    $query = "UPDATE conversations SET archived = 'yes' WHERE id = ?";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("i", $conversation_id);
+    if ($stmt->execute()) {
+        echo "Conversation archived successfully\n";
+    } else {
+        echo "Error archiving conversation: " . $stmt->error . "\n";
+    }
+}
+
+function createConversation($mysqli, $user1_id, $user2_id) {
+    $query = "INSERT INTO conversations (user1_id, user2_id) VALUES (?, ?)";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("ii", $user1_id, $user2_id);
+    if ($stmt->execute()) {
+        return $mysqli->insert_id;
+    } else {
+        echo "Error creating conversation: " . $stmt->error . "\n";
+        return null;
+    }
+}
+
+function sendMessage($mysqli, $conversation_id, $sender_id, $content) {
+    $query = "INSERT INTO messages (conversation_id, sender_id, content) VALUES (?, ?, ?)";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("iis", $conversation_id, $sender_id, $content);
+    if ($stmt->execute()) {
+        echo "Message sent successfully\n";
+    } else {
+        echo "Error sending message: " . $stmt->error . "\n";
+    }
+}
+
+
+
 function showPeopleYouMayKnow($mysqli, $userId) {
     $peopleQuery = "SELECT users.*, COUNT(DISTINCT mutual_contacts.contact_id) AS mutual_connections FROM users
                     JOIN contacts AS user_contacts ON users.id = user_contacts.contact_id
@@ -380,7 +425,6 @@ function showPeopleYouMayKnow($mysqli, $userId) {
     }
 }
 
-// Function to search users with filters
 function searchUsers($mysqli, $location, $profileLanguage, $currentCompany) {
     $searchQuery = "SELECT * FROM users WHERE location LIKE ? AND profile_language LIKE ? AND current_company LIKE ?";
 
@@ -406,13 +450,49 @@ function searchUsers($mysqli, $location, $profileLanguage, $currentCompany) {
     }
 }
 
+function searchConversations($mysqli, $user_id, $search_term) {
+    $query = "SELECT c.*, u.username AS user2_name FROM conversations c
+              JOIN users u ON (c.user1_id = ? AND c.user2_id = u.id) OR (c.user2_id = ? AND c.user1_id = u.id)
+              WHERE (u.username LIKE ?) AND c.archived = 'no'";
+    $search_term = "%$search_term%";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("iis", $user_id, $user_id, $search_term);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        echo "Conversation ID: " . $row['id'] . "\n";
+        echo "User: " . $row['user2_name'] . "\n";
+        echo "Archived: " . $row['archived'] . "\n";
+        echo "Created At: " . $row['created_at'] . "\n\n";
+    }
+}
+
+function filterConversations($mysqli, $user_id, $filter) {
+    $query = "SELECT c.*, u.username AS user2_name FROM conversations c
+              JOIN users u ON (c.user1_id = ? AND c.user2_id = u.id) OR (c.user2_id = ? AND c.user1_id = u.id)
+              WHERE c.archived = ?";
+
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param("iis", $user_id, $user_id, $filter);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        echo "Conversation ID: " . $row['id'] . "\n";
+        echo "User: " . $row['user2_name'] . "\n";
+        echo "Archived: " . $row['archived'] . "\n";
+        echo "Created At: " . $row['created_at'] . "\n\n";
+    }
+}
+
+
 function mainMenu($mysqli) {
     echo "\n--- Main Menu ---\n";
     echo "1. Profile\n";
     echo "2. Home\n";
     echo "3. Network\n";
-    echo "4. Search Users\n";
-    echo "5. Exit\n";
+    echo "4. Conversations\n";
+    echo "5. Search Users\n";
+    echo "6. Exit\n";
 
     $choice = readlineInput("Enter your choice: ");
 
@@ -523,6 +603,57 @@ function networkMenu($mysqli, $userId) {
     }
 }
 
+function conversationMenu($mysqli, $userId) {
+    echo "\n--- Conversation Menu ---\n";
+    echo "1. Create Conversation\n";
+    echo "2. Send Message\n";
+    echo "3. Delete Conversation\n";
+    echo "4. Mark Conversation as Unread\n";
+    echo "5. Archive Conversation\n";
+    echo "6. Search Conversations\n";
+    echo "7. Filter Conversations\n";
+    echo "8. Back to Main Menu\n";
+
+    $choice = readlineInput("Enter your choice: ");
+
+    switch ($choice) {
+        case '1':
+            $user2_id = (int)readlineInput("Enter user ID to start conversation with: ");
+            createConversation($mysqli, $userId, $user2_id);
+            break;
+        case '2':
+            $conversation_id = (int)readlineInput("Enter conversation ID to send message: ");
+            $content = readlineInput("Enter message content: ");
+            sendMessage($mysqli, $conversation_id, $userId, $content);
+            break;
+        case '3':
+            $conversation_id = (int)readlineInput("Enter conversation ID to delete: ");
+            deleteConversation($mysqli, $conversation_id);
+            break;
+        case '4':
+            $conversation_id = (int)readlineInput("Enter conversation ID to mark as unread: ");
+            markConversationAsUnread($mysqli, $conversation_id);
+            break;
+        case '5':
+            $conversation_id = (int)readlineInput("Enter conversation ID to archive: ");
+            archiveConversation($mysqli, $conversation_id);
+            break;
+        case '6':
+            $search_term = readlineInput("Enter search term: ");
+            searchConversations($mysqli, $userId, $search_term);
+            break;
+        case '7':
+            $filter = readlineInput("Enter filter (yes for archived, no for active): ");
+            filterConversations($mysqli, $userId, $filter);
+            break;
+        case '8':
+            return;
+        default:
+            echo "Invalid choice.\n";
+            break;
+    }
+}
+
 function searchUsersMenu($mysqli) {
     echo "\n--- Search Users Menu ---\n";
     $location = readlineInput("Enter location filter: ");
@@ -538,9 +669,8 @@ function readlineInput($prompt) {
     return trim(fgets(STDIN));
 }
 
-// Main interactive part
 $username = readlineInput("Enter your username: ");
-$password = readlineInput("Enter your password: "); // In a real application, handle passwords securely
+$password = readlineInput("Enter your password: ");
 
 $userId = getUserId($mysqli, $username);
 
@@ -578,9 +708,12 @@ while (true) {
             networkMenu($mysqli, $userId);
             break;
         case '4':
-            searchUsersMenu($mysqli);
+            conversationMenu($mysqli, $userId);
             break;
         case '5':
+            searchUsersMenu($mysqli);
+            break;
+        case '6':
             echo "Exiting the program.\n";
             $mysqli->close();
             exit;
