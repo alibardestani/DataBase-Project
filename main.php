@@ -193,8 +193,24 @@ function createPost($mysqli, $userId, $content) {
     }
 }
 
+// Function to check if post exists
+function checkPostExists($mysqli, $postId) {
+    $stmt = $mysqli->prepare("SELECT id FROM posts WHERE id = ?");
+    $stmt->bind_param("i", $postId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $exists = $result->num_rows > 0;
+    $stmt->close();
+    return $exists;
+}
+
 // Function to like a post
 function likePost($mysqli, $userId, $postId) {
+    if (!checkPostExists($mysqli, $postId)) {
+        echo "Post with ID $postId does not exist.\n";
+        return;
+    }
+
     $likeQuery = "INSERT INTO likes (user_id, post_id) VALUES (?, ?)";
     $stmt = $mysqli->prepare($likeQuery);
     $stmt->bind_param("ii", $userId, $postId);
@@ -204,10 +220,18 @@ function likePost($mysqli, $userId, $postId) {
     } else {
         echo "Error liking post: " . $stmt->error . "\n";
     }
+
+    // Display posts by contacts after liking a post
+    getPostsByContacts($mysqli, $userId);
 }
 
 // Function to comment on a post
 function commentOnPost($mysqli, $userId, $postId, $content, $parentCommentId = null) {
+    if (!checkPostExists($mysqli, $postId)) {
+        echo "Post with ID $postId does not exist.\n";
+        return;
+    }
+
     $commentQuery = "INSERT INTO comments (user_id, post_id, content, parent_comment_id) VALUES (?, ?, ?, ?)";
     $stmt = $mysqli->prepare($commentQuery);
     $stmt->bind_param("iisi", $userId, $postId, $content, $parentCommentId);
@@ -234,6 +258,11 @@ function likeComment($mysqli, $userId, $commentId) {
 
 // Function to share a post
 function sharePost($mysqli, $userId, $postId) {
+    if (!checkPostExists($mysqli, $postId)) {
+        echo "Post with ID $postId does not exist.\n";
+        return;
+    }
+
     $shareQuery = "INSERT INTO shares (user_id, post_id) VALUES (?, ?)";
     $stmt = $mysqli->prepare($shareQuery);
     $stmt->bind_param("ii", $userId, $postId);
@@ -284,6 +313,23 @@ function getPostsByContacts($mysqli, $userId) {
         }
     } else {
         echo "No posts found from your contacts.\n";
+    }
+}
+
+// Function to show all posts
+function showPosts($mysqli) {
+    $postsQuery = "SELECT * FROM posts ORDER BY created_at DESC";
+    $result = $mysqli->query($postsQuery);
+
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            echo "Post ID: " . $row['id'] . "\n";
+            echo "User ID: " . $row['user_id'] . "\n";
+            echo "Content: " . $row['content'] . "\n";
+            echo "Created At: " . $row['created_at'] . "\n\n";
+        }
+    } else {
+        echo "No posts found.\n";
     }
 }
 
@@ -373,42 +419,6 @@ function mainMenu($mysqli) {
     return $choice;
 }
 
-function homeMenu($mysqli, $userId) {
-    echo "\n--- Home Menu ---\n";
-    echo "1. View Posts by Contacts\n";
-    echo "2. Like a Post\n";
-    echo "3. Comment on a Post\n";
-    echo "4. Share a Post\n";
-    echo "5. Back to Main Menu\n";
-
-    $choice = readlineInput("Enter your choice: ");
-
-    switch ($choice) {
-        case '1':
-            getPostsByContacts($mysqli, $userId);
-            break;
-        case '2':
-            $postId = (int)readlineInput("Enter post ID to like: ");
-            likePost($mysqli, $userId, $postId);
-            break;
-        case '3':
-            $postId = (int)readlineInput("Enter post ID to comment on: ");
-            $content = readlineInput("Enter comment content: ");
-            commentOnPost($mysqli, $userId, $postId, $content);
-            break;
-        case '4':
-            $postId = (int)readlineInput("Enter post ID to share: ");
-            sharePost($mysqli, $userId, $postId);
-            break;
-        case '5':
-            return;
-        default:
-            echo "Invalid choice.\n";
-            break;
-    }
-}
-
-
 function profileMenu($mysqli, $userId) {
     echo "\n--- Profile Menu ---\n";
     echo "1. Create/Update Profile\n";
@@ -429,15 +439,18 @@ function profileMenu($mysqli, $userId) {
             createPost($mysqli, $userId, $content);
             break;
         case '3':
+            showPosts($mysqli);
             $postId = (int)readlineInput("Enter post ID to like: ");
             likePost($mysqli, $userId, $postId);
             break;
         case '4':
+            showPosts($mysqli);
             $postId = (int)readlineInput("Enter post ID to comment on: ");
             $content = readlineInput("Enter comment content: ");
             commentOnPost($mysqli, $userId, $postId, $content);
             break;
         case '5':
+            showPosts($mysqli);
             $postId = (int)readlineInput("Enter post ID to share: ");
             sharePost($mysqli, $userId, $postId);
             break;
@@ -449,6 +462,43 @@ function profileMenu($mysqli, $userId) {
     }
 }
 
+function homeMenu($mysqli, $userId) {
+    echo "\n--- Home Menu ---\n";
+    echo "1. View Posts by Contacts\n";
+    echo "2. Like a Post\n";
+    echo "3. Comment on a Post\n";
+    echo "4. Share a Post\n";
+    echo "5. Back to Main Menu\n";
+
+    $choice = readlineInput("Enter your choice: ");
+
+    switch ($choice) {
+        case '1':
+            getPostsByContacts($mysqli, $userId);
+            break;
+        case '2':
+            showPosts($mysqli);
+            $postId = (int)readlineInput("Enter post ID to like: ");
+            likePost($mysqli, $userId, $postId);
+            break;
+        case '3':
+            showPosts($mysqli);
+            $postId = (int)readlineInput("Enter post ID to comment on: ");
+            $content = readlineInput("Enter comment content: ");
+            commentOnPost($mysqli, $userId, $postId, $content);
+            break;
+        case '4':
+            showPosts($mysqli);
+            $postId = (int)readlineInput("Enter post ID to share: ");
+            sharePost($mysqli, $userId, $postId);
+            break;
+        case '5':
+            return;
+        default:
+            echo "Invalid choice.\n";
+            break;
+    }
+}
 
 function networkMenu($mysqli, $userId) {
     echo "\n--- Network Menu ---\n";
